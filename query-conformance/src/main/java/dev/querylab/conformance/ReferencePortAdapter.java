@@ -43,6 +43,12 @@ public final class ReferencePortAdapter implements TransactionSearchPort {
                 .filter(t -> criteria.createdFrom() == null || !t.createdAt().isBefore(criteria.createdFrom()))
                 .filter(t -> criteria.createdTo() == null || t.createdAt().isBefore(criteria.createdTo()))
                 .filter(t -> criteria.descriptionContains() == null || containsIgnoreCase(t.description(), criteria.descriptionContains()))
+                // Join filters. accountRiskRating is never null (INNER JOIN); the
+                // merchant filters use equals(), which is false for null-merchant
+                // rows — exactly the LEFT-JOIN-with-a-WHERE semantics.
+                .filter(t -> criteria.accountRiskRating() == null || criteria.accountRiskRating().equals(t.accountRiskRating()))
+                .filter(t -> criteria.merchantCategory() == null || criteria.merchantCategory().equals(t.merchantCategory()))
+                .filter(t -> criteria.merchantCountry() == null || criteria.merchantCountry().equals(t.merchantCountry()))
                 .sorted(comparator(criteria))
                 .toList();
 

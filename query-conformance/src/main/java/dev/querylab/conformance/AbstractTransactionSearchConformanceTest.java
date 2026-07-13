@@ -90,8 +90,52 @@ public abstract class AbstractTransactionSearchConformanceTest {
                 named("maxAmount", allRows().maxAmount(new BigDecimal("10")).build()),
                 named("createdFrom", allRows().createdFrom(SeedData.RANGE_FROM).build()),
                 named("createdTo", allRows().createdTo(SeedData.RANGE_TO).build()),
-                named("descriptionContains", allRows().descriptionContains("ref").build())
+                named("descriptionContains", allRows().descriptionContains("ref").build()),
+                named("accountRiskRating", allRows().accountRiskRating("MEDIUM").build()),
+                named("merchantCategory", allRows().merchantCategory("RETAIL").build()),
+                named("merchantCountry", allRows().merchantCountry("DE").build())
         ).map(Arguments::of);
+    }
+
+    @Test
+    void accountRiskRatingFiltersAcrossTheAccountJoin() {
+        // ACCOUNT_SINGLE is the only HIGH-risk account and has exactly one row.
+        SearchResult<Transaction> result = assertMatchesReference(
+                allRows().accountRiskRating("HIGH").build());
+
+        assertThat(result.content()).containsExactly(SeedData.TX_SINGLE_ACCOUNT);
+        assertThat(result.content()).allMatch(t -> "HIGH".equals(t.accountRiskRating()));
+    }
+
+    @Test
+    void merchantFilterExcludesTransactionsWithNoMerchant() {
+        SearchResult<Transaction> result = assertMatchesReference(
+                allRows().merchantCategory("RETAIL").build());
+
+        // Retail merchants: Retail GmbH (TX_PERCENT, TX_HUNDRED) and Nippon KK (TX_JPY),
+        // plus generated rows — but never a null-merchant row.
+        assertThat(result.content())
+                .contains(SeedData.TX_PERCENT, SeedData.TX_HUNDRED, SeedData.TX_JPY)
+                .doesNotContain(SeedData.TX_NULL_COUNTERPARTY, SeedData.TX_BOUNDARY_LOW)
+                .allMatch(t -> "RETAIL".equals(t.merchantCategory()));
+    }
+
+    @Test
+    void joinedFieldsAreProjectedIncludingNulls() {
+        // A merchant-bearing row carries all three merchant fields...
+        SearchResult<Transaction> coffee = port().search(
+                allRows().descriptionContains("coffee shop").build());
+        assertThat(coffee.content()).containsExactly(SeedData.TX_COFFEE);
+        assertThat(coffee.content().getFirst().merchantName()).isEqualTo("Blue Bottle");
+        assertThat(coffee.content().getFirst().accountRiskRating()).isEqualTo("MEDIUM");
+
+        // ...while a merchant-less row projects null merchant fields (LEFT JOIN),
+        // and full-record equality against the reference already asserts this.
+        SearchResult<Transaction> hold = assertMatchesReference(
+                allRows().descriptionContains("card hold").build());
+        assertThat(hold.content()).containsExactly(SeedData.TX_NULL_COUNTERPARTY);
+        assertThat(hold.content().getFirst().merchantName()).isNull();
+        assertThat(hold.content().getFirst().merchantCategory()).isNull();
     }
 
     @Test

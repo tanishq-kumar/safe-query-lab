@@ -13,7 +13,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 
@@ -30,9 +32,19 @@ import static dev.querylab.common.model.TransactionType.DEBIT;
  * a fixed-seed generator. No {@code Instant.now()}, no random UUIDs — the same
  * bytes on every machine, every run.
  *
- * <p>{@link #EXPECTED} is the full dataset in memory, which is what lets the
- * {@link ReferencePortAdapter} compute expected results in plain Java streams:
- * behavioral equivalence is derived, never hand-counted.
+ * <p>The data spans three tables so the engines have joins to follow:
+ * <ul>
+ *   <li>{@code account} (3 rows) — every transaction has one; its
+ *       {@code risk_rating} is projected onto {@link Transaction#accountRiskRating()}
+ *       via an INNER JOIN.</li>
+ *   <li>{@code merchant} (6 rows) — optional; roughly a quarter of transactions
+ *       have none, so the LEFT JOIN and null-projection paths are exercised.</li>
+ * </ul>
+ *
+ * <p>{@link #EXPECTED} is the full dataset in memory (with joined fields already
+ * resolved), which is what lets the {@link ReferencePortAdapter} compute expected
+ * results in plain Java streams: behavioral equivalence is derived, never
+ * hand-counted.
  *
  * <p>Determinism details that matter:
  * <ul>
@@ -53,66 +65,97 @@ public final class SeedData {
     /** Has exactly one transaction ({@link #TX_SINGLE_ACCOUNT}). */
     public static final UUID ACCOUNT_SINGLE = new UUID(0xACC0, 3);
 
+    /** One merchant per (name, category, country); a transaction may reference one or none. */
+    record Merchant(UUID id, String name, String category, String country) {
+    }
+
+    public static final Merchant MERCH_BLUEBOTTLE = new Merchant(new UUID(0x3E11, 1), "Blue Bottle", "FOOD", "US");
+    public static final Merchant MERCH_RETAIL = new Merchant(new UUID(0x3E11, 2), "Retail GmbH", "RETAIL", "DE");
+    public static final Merchant MERCH_ETL = new Merchant(new UUID(0x3E11, 3), "ETL Systems", "SOFTWARE", "US");
+    public static final Merchant MERCH_BANK = new Merchant(new UUID(0x3E11, 4), "Bank AG", "FINANCE", "DE");
+    public static final Merchant MERCH_NIPPON = new Merchant(new UUID(0x3E11, 5), "Nippon KK", "RETAIL", "JP");
+    public static final Merchant MERCH_SAAS = new Merchant(new UUID(0x3E11, 6), "SaaS Co", "SOFTWARE", "US");
+
+    static final List<Merchant> MERCHANTS = List.of(
+            MERCH_BLUEBOTTLE, MERCH_RETAIL, MERCH_ETL, MERCH_BANK, MERCH_NIPPON, MERCH_SAAS);
+
     /** Anchor for all generated timestamps; never use Instant.now() in seed or tests. */
     public static final Instant BASE = Instant.parse("2026-01-15T12:00:00Z");
     /** Half-open range used by the boundary tests: [RANGE_FROM, RANGE_TO). */
     public static final Instant RANGE_FROM = Instant.parse("2026-01-10T00:00:00Z");
     public static final Instant RANGE_TO = Instant.parse("2026-01-14T00:00:00Z");
 
+    // Transaction id -> merchant id (or absent), needed only for INSERT; the
+    // domain record carries the merchant's attributes, not its FK.
+    private static final Map<UUID, UUID> TX_MERCHANT = new LinkedHashMap<>();
+
     // --- Hand-crafted rows: one per edge case the suite asserts on by name ---
+    // Rows with no merchant argument have a NULL merchant (LEFT JOIN yields nulls).
     public static final Transaction TX_BOUNDARY_LOW =
-            tx(1, ACCOUNT_MAIN, "99.9999", "USD", COMPLETED, DEBIT, "Boundary low payment ref 900", "Acme Corp", BASE.minus(1, ChronoUnit.HOURS));
+            tx(1, ACCOUNT_MAIN, "99.9999", "USD", COMPLETED, DEBIT, "Boundary low payment ref 900", "Acme Corp", null, BASE.minus(1, ChronoUnit.HOURS));
     public static final Transaction TX_BOUNDARY_EXACT =
-            tx(2, ACCOUNT_MAIN, "100.0000", "USD", COMPLETED, DEBIT, "Boundary exact payment ref 901", "Acme Corp", BASE.minus(2, ChronoUnit.HOURS));
+            tx(2, ACCOUNT_MAIN, "100.0000", "USD", COMPLETED, DEBIT, "Boundary exact payment ref 901", "Acme Corp", null, BASE.minus(2, ChronoUnit.HOURS));
     public static final Transaction TX_BOUNDARY_HIGH =
-            tx(3, ACCOUNT_MAIN, "100.0001", "USD", COMPLETED, DEBIT, "Boundary high payment ref 902", "Acme Corp", BASE.minus(3, ChronoUnit.HOURS));
+            tx(3, ACCOUNT_MAIN, "100.0001", "USD", COMPLETED, DEBIT, "Boundary high payment ref 902", "Acme Corp", null, BASE.minus(3, ChronoUnit.HOURS));
     public static final Transaction TX_ZERO =
-            tx(4, ACCOUNT_MAIN, "0.0000", "EUR", PENDING, CREDIT, "Zero amount adjustment", "Internal", BASE.minus(4, ChronoUnit.HOURS));
+            tx(4, ACCOUNT_MAIN, "0.0000", "EUR", PENDING, CREDIT, "Zero amount adjustment", "Internal", null, BASE.minus(4, ChronoUnit.HOURS));
     public static final Transaction TX_NEGATIVE =
-            tx(5, ACCOUNT_MAIN, "-25.5000", "USD", COMPLETED, CREDIT, "Refund reversal ref 903", "Acme Corp", BASE.minus(5, ChronoUnit.HOURS));
+            tx(5, ACCOUNT_MAIN, "-25.5000", "USD", COMPLETED, CREDIT, "Refund reversal ref 903", "Acme Corp", null, BASE.minus(5, ChronoUnit.HOURS));
+    /** Null counterparty AND null merchant — two independent null columns on one row. */
     public static final Transaction TX_NULL_COUNTERPARTY =
-            tx(6, ACCOUNT_SECONDARY, "42.0000", "USD", PENDING, DEBIT, "Card hold no counterparty yet", null, BASE.minus(6, ChronoUnit.HOURS));
+            tx(6, ACCOUNT_SECONDARY, "42.0000", "USD", PENDING, DEBIT, "Card hold no counterparty yet", null, null, BASE.minus(6, ChronoUnit.HOURS));
     /** created_at exactly at RANGE_FROM — must be INCLUDED by the half-open range. */
     public static final Transaction TX_AT_FROM =
-            tx(7, ACCOUNT_MAIN, "10.0000", "USD", COMPLETED, DEBIT, "Exactly at range start", "Acme Corp", RANGE_FROM);
+            tx(7, ACCOUNT_MAIN, "10.0000", "USD", COMPLETED, DEBIT, "Exactly at range start", "Acme Corp", null, RANGE_FROM);
     /** created_at exactly at RANGE_TO — must be EXCLUDED by the half-open range. */
     public static final Transaction TX_AT_TO =
-            tx(8, ACCOUNT_MAIN, "11.0000", "USD", COMPLETED, DEBIT, "Exactly at range end", "Acme Corp", RANGE_TO);
+            tx(8, ACCOUNT_MAIN, "11.0000", "USD", COMPLETED, DEBIT, "Exactly at range end", "Acme Corp", null, RANGE_TO);
     public static final Transaction TX_COFFEE =
-            tx(9, ACCOUNT_SECONDARY, "4.5000", "USD", COMPLETED, DEBIT, "Coffee SHOP purchase", "Blue Bottle", BASE.minus(7, ChronoUnit.HOURS));
+            tx(9, ACCOUNT_SECONDARY, "4.5000", "USD", COMPLETED, DEBIT, "Coffee SHOP purchase", "Blue Bottle", MERCH_BLUEBOTTLE, BASE.minus(7, ChronoUnit.HOURS));
     /** The only row whose description contains a LITERAL "100%". */
     public static final Transaction TX_PERCENT =
-            tx(10, ACCOUNT_MAIN, "55.0000", "USD", COMPLETED, DEBIT, "Discount 100%_done applied", "Retail GmbH", BASE.minus(8, ChronoUnit.HOURS));
+            tx(10, ACCOUNT_MAIN, "55.0000", "USD", COMPLETED, DEBIT, "Discount 100%_done applied", "Retail GmbH", MERCH_RETAIL, BASE.minus(8, ChronoUnit.HOURS));
     /** Wildcard decoy: contains "100" but not "100%" — an unescaped '%' would match it. */
     public static final Transaction TX_HUNDRED =
-            tx(11, ACCOUNT_MAIN, "60.0000", "USD", COMPLETED, DEBIT, "Invoice 100 dollars flat", "Retail GmbH", BASE.minus(9, ChronoUnit.HOURS));
+            tx(11, ACCOUNT_MAIN, "60.0000", "USD", COMPLETED, DEBIT, "Invoice 100 dollars flat", "Retail GmbH", MERCH_RETAIL, BASE.minus(9, ChronoUnit.HOURS));
     /** The only row containing a LITERAL "_case". */
     public static final Transaction TX_UNDERSCORE =
-            tx(12, ACCOUNT_MAIN, "61.0000", "USD", COMPLETED, DEBIT, "snake_case_import batch", "ETL Systems", BASE.minus(10, ChronoUnit.HOURS));
+            tx(12, ACCOUNT_MAIN, "61.0000", "USD", COMPLETED, DEBIT, "snake_case_import batch", "ETL Systems", MERCH_ETL, BASE.minus(10, ChronoUnit.HOURS));
     /** Underscore decoy: " case" would match "_case" if '_' were left unescaped. */
     public static final Transaction TX_SPACE_CASE =
-            tx(13, ACCOUNT_MAIN, "62.0000", "USD", COMPLETED, DEBIT, "test case sensitivity row", "QA Guild", BASE.minus(11, ChronoUnit.HOURS));
+            tx(13, ACCOUNT_MAIN, "62.0000", "USD", COMPLETED, DEBIT, "test case sensitivity row", "QA Guild", null, BASE.minus(11, ChronoUnit.HOURS));
     public static final Transaction TX_UNICODE =
-            tx(14, ACCOUNT_SECONDARY, "70.0000", "EUR", COMPLETED, CREDIT, "Übertragung nach München", "Bank AG", BASE.minus(12, ChronoUnit.HOURS));
+            tx(14, ACCOUNT_SECONDARY, "70.0000", "EUR", COMPLETED, CREDIT, "Übertragung nach München", "Bank AG", MERCH_BANK, BASE.minus(12, ChronoUnit.HOURS));
     public static final Transaction TX_JPY =
-            tx(15, ACCOUNT_SECONDARY, "5000.0000", "JPY", FAILED, DEBIT, "Tokyo settlement ref 904", "Nippon KK", BASE.minus(13, ChronoUnit.HOURS));
+            tx(15, ACCOUNT_SECONDARY, "5000.0000", "JPY", FAILED, DEBIT, "Tokyo settlement ref 904", "Nippon KK", MERCH_NIPPON, BASE.minus(13, ChronoUnit.HOURS));
     public static final Transaction TX_CANCELLED =
-            tx(16, ACCOUNT_SECONDARY, "15.0000", "EUR", CANCELLED, DEBIT, "Cancelled subscription ref 905", "SaaS Co", BASE.minus(14, ChronoUnit.HOURS));
+            tx(16, ACCOUNT_SECONDARY, "15.0000", "EUR", CANCELLED, DEBIT, "Cancelled subscription ref 905", "SaaS Co", MERCH_SAAS, BASE.minus(14, ChronoUnit.HOURS));
+    /** Only row on ACCOUNT_SINGLE (risk HIGH), so accountRiskRating=HIGH selects exactly this. */
     public static final Transaction TX_SINGLE_ACCOUNT =
-            tx(17, ACCOUNT_SINGLE, "33.0000", "USD", COMPLETED, DEBIT, "Only row for the single account", "Solo LLC", BASE.minus(15, ChronoUnit.HOURS));
+            tx(17, ACCOUNT_SINGLE, "33.0000", "USD", COMPLETED, DEBIT, "Only row for the single account", "Solo LLC", null, BASE.minus(15, ChronoUnit.HOURS));
     // Three rows with IDENTICAL created_at and IDENTICAL amount: without the id
     // tiebreak, their relative order is unstable and pagination flakes.
     public static final Transaction TX_DUP_A =
-            tx(18, ACCOUNT_MAIN, "77.0000", "USD", PENDING, DEBIT, "Duplicate sort key row A", "Dup Inc", BASE.minus(16, ChronoUnit.HOURS));
+            tx(18, ACCOUNT_MAIN, "77.0000", "USD", PENDING, DEBIT, "Duplicate sort key row A", "Dup Inc", null, BASE.minus(16, ChronoUnit.HOURS));
     public static final Transaction TX_DUP_B =
-            tx(19, ACCOUNT_MAIN, "77.0000", "USD", PENDING, DEBIT, "Duplicate sort key row B", "Dup Inc", BASE.minus(16, ChronoUnit.HOURS));
+            tx(19, ACCOUNT_MAIN, "77.0000", "USD", PENDING, DEBIT, "Duplicate sort key row B", "Dup Inc", null, BASE.minus(16, ChronoUnit.HOURS));
     public static final Transaction TX_DUP_C =
-            tx(20, ACCOUNT_MAIN, "77.0000", "USD", PENDING, DEBIT, "Duplicate sort key row C", "Dup Inc", BASE.minus(16, ChronoUnit.HOURS));
+            tx(20, ACCOUNT_MAIN, "77.0000", "USD", PENDING, DEBIT, "Duplicate sort key row C", "Dup Inc", null, BASE.minus(16, ChronoUnit.HOURS));
 
     /** The complete dataset — hand-crafted rows first, then 130 generated ones. */
     public static final List<Transaction> EXPECTED = buildAll();
 
     private SeedData() {
+    }
+
+    private static String riskOf(UUID accountId) {
+        if (accountId.equals(ACCOUNT_MAIN)) {
+            return "LOW";
+        }
+        if (accountId.equals(ACCOUNT_SECONDARY)) {
+            return "MEDIUM";
+        }
+        return "HIGH"; // ACCOUNT_SINGLE
     }
 
     private static List<Transaction> buildAll() {
@@ -137,8 +180,15 @@ public final class SeedData {
                     .minus(random.nextInt(40), ChronoUnit.DAYS)
                     .minusSeconds(random.nextInt(86_400))
                     .truncatedTo(ChronoUnit.MICROS);
+            // ~1 in 4 rows has no merchant; the rest cycle through the six.
+            int pick = random.nextInt(8);
+            Merchant merchant = pick < MERCHANTS.size() ? MERCHANTS.get(pick) : null;
+            UUID id = new UUID(0x7A, n);
+            if (merchant != null) {
+                TX_MERCHANT.put(id, merchant.id());
+            }
             all.add(new Transaction(
-                    new UUID(0x7A, n),
+                    id,
                     account,
                     amount,
                     currencies[random.nextInt(currencies.length)],
@@ -146,24 +196,37 @@ public final class SeedData {
                     types[random.nextInt(types.length)],
                     capitalize(words[random.nextInt(words.length)]) + " payment ref " + n,
                     random.nextInt(7) == 0 ? null : counterparties[random.nextInt(counterparties.length)],
-                    createdAt));
+                    createdAt,
+                    riskOf(account),
+                    merchant == null ? null : merchant.name(),
+                    merchant == null ? null : merchant.category(),
+                    merchant == null ? null : merchant.country()));
         }
         return List.copyOf(all);
     }
 
     private static Transaction tx(int n, UUID account, String amount, String currency,
                                   TransactionStatus status, TransactionType type,
-                                  String description, String counterparty, Instant createdAt) {
-        return new Transaction(new UUID(0x7A, n), account, new BigDecimal(amount).setScale(4),
+                                  String description, String counterparty, Merchant merchant,
+                                  Instant createdAt) {
+        UUID id = new UUID(0x7A, n);
+        if (merchant != null) {
+            TX_MERCHANT.put(id, merchant.id());
+        }
+        return new Transaction(id, account, new BigDecimal(amount).setScale(4),
                 currency, status, type, description, counterparty,
-                createdAt.truncatedTo(ChronoUnit.MICROS));
+                createdAt.truncatedTo(ChronoUnit.MICROS),
+                riskOf(account),
+                merchant == null ? null : merchant.name(),
+                merchant == null ? null : merchant.category(),
+                merchant == null ? null : merchant.country());
     }
 
     private static String capitalize(String word) {
         return Character.toUpperCase(word.charAt(0)) + word.substring(1);
     }
 
-    /** Batch-inserts accounts and all transactions. Idempotence is the caller's concern. */
+    /** Batch-inserts accounts, merchants (FK parents first) and all transactions. */
     public static void insertAll(DataSource dataSource) {
         try (Connection connection = dataSource.getConnection()) {
             try (PreparedStatement accounts = connection.prepareStatement(
@@ -173,10 +236,21 @@ public final class SeedData {
                 insertAccount(accounts, ACCOUNT_SINGLE, "Dormant Account", "HIGH");
                 accounts.executeBatch();
             }
+            try (PreparedStatement merchants = connection.prepareStatement(
+                    "INSERT INTO merchant (id, name, category, country) VALUES (?, ?, ?, ?)")) {
+                for (Merchant m : MERCHANTS) {
+                    merchants.setObject(1, m.id());
+                    merchants.setString(2, m.name());
+                    merchants.setString(3, m.category());
+                    merchants.setString(4, m.country());
+                    merchants.addBatch();
+                }
+                merchants.executeBatch();
+            }
             try (PreparedStatement txs = connection.prepareStatement("""
                     INSERT INTO transactions
-                      (id, account_id, amount, currency, status, type, description, counterparty, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""")) {
+                      (id, account_id, amount, currency, status, type, description, counterparty, created_at, merchant_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""")) {
                 for (Transaction t : EXPECTED) {
                     txs.setObject(1, t.id());
                     txs.setObject(2, t.accountId());
@@ -188,6 +262,7 @@ public final class SeedData {
                     txs.setString(8, t.counterparty());
                     // JDBC 4.2 defines OffsetDateTime, not Instant, for timestamptz.
                     txs.setObject(9, t.createdAt().atOffset(ZoneOffset.UTC));
+                    txs.setObject(10, TX_MERCHANT.get(t.id())); // null when no merchant
                     txs.addBatch();
                 }
                 txs.executeBatch();

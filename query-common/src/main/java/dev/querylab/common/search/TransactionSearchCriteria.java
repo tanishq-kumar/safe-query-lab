@@ -17,8 +17,16 @@ import java.util.UUID;
  * {@code createdFrom} is inclusive and {@code createdTo} exclusive (half-open,
  * so adjacent ranges tile without overlap — the idiomatic time-range contract).
  *
+ * <p>The last three filters cross relationships: {@code accountRiskRating}
+ * filters on the joined {@code account}, and {@code merchantCategory}/
+ * {@code merchantCountry} on the joined {@code merchant}. A merchant filter
+ * naturally excludes transactions with no merchant (the join has no match).
+ *
  * @param descriptionContains case-insensitive substring; LIKE wildcards in the
  *                            user's text must match literally (see {@link LikeEscaper})
+ * @param accountRiskRating   exact match on account.risk_rating (join filter)
+ * @param merchantCategory    exact match on merchant.category (join filter)
+ * @param merchantCountry     exact match on merchant.country (join filter)
  */
 public record TransactionSearchCriteria(
         Set<TransactionStatus> statuses,
@@ -30,6 +38,9 @@ public record TransactionSearchCriteria(
         Instant createdFrom,
         Instant createdTo,
         String descriptionContains,
+        String accountRiskRating,
+        String merchantCategory,
+        String merchantCountry,
         int page,
         int size,
         SortKey sortBy,
@@ -43,6 +54,9 @@ public record TransactionSearchCriteria(
         statuses = statuses == null ? Set.of() : Set.copyOf(statuses);
         currency = blankToNull(currency);
         descriptionContains = blankToNull(descriptionContains);
+        accountRiskRating = blankToNull(accountRiskRating);
+        merchantCategory = blankToNull(merchantCategory);
+        merchantCountry = blankToNull(merchantCountry);
         sortBy = sortBy == null ? SortKey.CREATED_AT : sortBy;
         sortDirection = sortDirection == null ? SortDirection.DESC : sortDirection;
 
@@ -89,6 +103,9 @@ public record TransactionSearchCriteria(
         private Instant createdFrom;
         private Instant createdTo;
         private String descriptionContains;
+        private String accountRiskRating;
+        private String merchantCategory;
+        private String merchantCountry;
         private int page = 0;
         private int size = DEFAULT_PAGE_SIZE;
         private SortKey sortBy = SortKey.CREATED_AT;
@@ -147,6 +164,21 @@ public record TransactionSearchCriteria(
             return this;
         }
 
+        public Builder accountRiskRating(String accountRiskRating) {
+            this.accountRiskRating = accountRiskRating;
+            return this;
+        }
+
+        public Builder merchantCategory(String merchantCategory) {
+            this.merchantCategory = merchantCategory;
+            return this;
+        }
+
+        public Builder merchantCountry(String merchantCountry) {
+            this.merchantCountry = merchantCountry;
+            return this;
+        }
+
         public Builder page(int page) {
             this.page = page;
             return this;
@@ -170,6 +202,7 @@ public record TransactionSearchCriteria(
         public TransactionSearchCriteria build() {
             return new TransactionSearchCriteria(statuses, type, accountId, currency,
                     minAmount, maxAmount, createdFrom, createdTo, descriptionContains,
+                    accountRiskRating, merchantCategory, merchantCountry,
                     page, size, sortBy, sortDirection);
         }
     }

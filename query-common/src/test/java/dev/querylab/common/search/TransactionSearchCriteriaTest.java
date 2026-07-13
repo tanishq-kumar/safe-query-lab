@@ -16,11 +16,14 @@ class TransactionSearchCriteriaTest {
     @Test
     void defaultsAreAppliedForNullSortAndEmptyStrings() {
         var criteria = new TransactionSearchCriteria(null, null, null, " ", null, null,
-                null, null, "", 0, 50, null, null);
+                null, null, "", "  ", "", null, 0, 50, null, null);
 
         assertThat(criteria.statuses()).isEmpty();
         assertThat(criteria.currency()).isNull();
         assertThat(criteria.descriptionContains()).isNull();
+        assertThat(criteria.accountRiskRating()).isNull();
+        assertThat(criteria.merchantCategory()).isNull();
+        assertThat(criteria.merchantCountry()).isNull();
         assertThat(criteria.sortBy()).isEqualTo(SortKey.CREATED_AT);
         assertThat(criteria.sortDirection()).isEqualTo(SortDirection.DESC);
     }
