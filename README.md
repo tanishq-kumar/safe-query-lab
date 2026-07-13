@@ -34,16 +34,24 @@ five mainstream Java techniques, side by side:
 
 All five implement one port —
 `TransactionSearchPort.search(TransactionSearchCriteria): SearchResult<Transaction>`
-— and all five must pass the **same conformance suite** (30 tests against a real
+— and all five must pass the **same conformance suite** (36 tests against a real
 PostgreSQL via Testcontainers) before they may exist. Equivalence isn't claimed;
 it's derived: expected results are computed by an in-memory reference
 implementation over a deterministic 150-row dataset and compared record-for-record,
 in order, against every engine.
 
+The data spans three tables so every engine has joins to follow: each transaction
+has a mandatory `account` (INNER JOIN, projecting `accountRiskRating`) and an
+optional `merchant` (LEFT JOIN, projecting `merchantName`/`Category`/`Country`,
+null when absent). Three filters cross those joins — `accountRiskRating`,
+`merchantCategory`, `merchantCountry` — and each engine expresses them in its own
+idiom (Criteria path traversal, QueryDSL `tx.account.*`, a jOOQ join graph,
+MyBatis' join DSL, hand-written JOIN SQL).
+
 ```
 safe-query-lab
 ├── query-common/               the contract: domain record, criteria DTO, port, LikeEscaper, Flyway schema
-├── query-conformance/          the proof: seed data, reference impl, abstract 30-test suite, shared PG container
+├── query-conformance/          the proof: seed data, reference impl, abstract 36-test suite, shared PG container
 ├── engine-jdbc/                ┐
 ├── engine-jpa-specifications/  │
 ├── engine-querydsl/            │ five interchangeable implementations
@@ -123,6 +131,7 @@ behavior — which is the point of conformance testing.
 | Codegen required | no | no | apt on your entities | build-time DB (Docker) | no (hand-written support class) |
 | Dynamic predicate idiom | `List<String>` + params in lockstep | `Specification`-per-filter, `allOf()` | `BooleanBuilder` | `Condition` + `noCondition()` | `isXxxWhenPresent()` |
 | Count query | 2nd query, shared WHERE builder | derived automatically³ | explicit 2nd query⁴ | same `Condition` object reused | shared `WhereApplier` |
+| Join idiom | hand-written `JOIN`, qualified cols | `@ManyToOne` + path `root.get("account")` | `@ManyToOne` + `tx.account.*` paths | join graph on the generated tables | `.join(t, on(...))` DSL with aliases |
 | SQL visibility before execution | total (you wrote it) | no (Hibernate, at flush time) | no (Hibernate) | total (`getSQL()`) | total (rendered provider) |
 | Wildcard escaping | yours (`LikeEscaper`) | yours | yours | built-in (`!`) | yours |
 | Returns entities or rows | rows you map | managed entities | managed entities | records you map | rows you map |
@@ -150,7 +159,13 @@ property, not a feature flag, and that asymmetry is itself the lesson.
   an edge (amounts `99.9999/100.0000/100.0001` around a boundary, timestamps
   exactly *at* the half-open range edges, `NULL` counterparty, literal `%`/`_`
   decoys, ü/Ü content, three rows with identical sort keys) + 130 rows from
-  `new Random(42)`. No `Instant.now()` anywhere.
+  `new Random(42)`. No `Instant.now()` anywhere. Roughly a quarter of rows have
+  **no merchant**, so the LEFT JOIN and its null projections are always exercised.
+- **Join coverage**: filters on `accountRiskRating` (INNER JOIN) and
+  `merchantCategory`/`merchantCountry` (LEFT JOIN) are in the parameterized
+  single-filter cases, plus dedicated tests that a merchant filter excludes
+  merchant-less rows and that the joined fields (including nulls) are projected
+  identically by every engine.
 - **A reference implementation** (`ReferencePortAdapter`, ~40 lines of Streams)
   defines the semantics executable-y; the suite ran green against it before any
   SQL existed. Every engine assertion is "matches the reference, exactly,
@@ -286,14 +301,16 @@ Every one of these bit during development; the fix is in the code with a comment
   be able to write the safe version — it's what all the others compile down to,
   and it's the interview question.
 
-## Stretch goals (deliberately out of v1 scope)
+## Stretch goals
 
-The `account` table and FK ship in the schema already; adding an
-`account.riskRating` filter would demonstrate each engine's join story — and the
-JPA Specifications count-query trap (`query.getResultType()` guard, fetch-join
-vs. `EXISTS` subquery). Also interesting: keyset/seek pagination (the `id ASC`
-tiebreak is the groundwork), `status = ANY(?)` array binding in the JDBC engine,
-and Hibernate's `@JdbcTypeCode` route for native PG enums.
+The account (INNER) and merchant (LEFT) joins are **implemented** — each engine
+projects joined columns and supports the three join filters, and the conformance
+suite proves them equivalent (including null-merchant projection). Still open:
+the JPA Specifications count-query trap surfaces once a join needs `distinct` or a
+fetch-join (`query.getResultType()` guard, fetch-join vs. `EXISTS` subquery);
+keyset/seek pagination (the `id ASC` tiebreak is the groundwork); `status = ANY(?)`
+array binding in the JDBC engine; and Hibernate's `@JdbcTypeCode` route for native
+PG enums.
 
 ## IDE setup
 

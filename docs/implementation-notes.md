@@ -19,6 +19,21 @@ Primary sources:
 - `query-common/src/main/java/dev/querylab/common/search/LikeEscaper.java`
 - `engine-jdbc/src/main/java/dev/querylab/engine/jdbc/JdbcTransactionSearchAdapter.java`
 
+## Joins Across Tables
+
+Each transaction has a mandatory `account` (INNER JOIN) and an optional `merchant`
+(LEFT JOIN). The engines project `accountRiskRating` and the nullable
+`merchantName`/`merchantCategory`/`merchantCountry` into the domain record, and
+support filters on `accountRiskRating`, `merchantCategory`, `merchantCountry`.
+
+The interesting differences are in *how* each engine follows the relationship:
+raw JOIN SQL with qualified columns (JDBC), `@ManyToOne` associations traversed by
+Criteria paths (JPA Specifications) or QueryDSL `tx.account.*` paths, a join graph
+over the generated tables reused for both data and count queries (jOOQ), and the
+`.join(table, on(...))` DSL with table aliases (MyBatis). A predicate on the
+merchant LEFT JOIN behaves as an inner filter — rows with no merchant fail the
+equality — which the conformance suite pins down alongside the null projection.
+
 ## Engine Notes
 
 ### JPA Specifications
