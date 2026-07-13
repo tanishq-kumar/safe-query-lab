@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: safe-query-lab
+  jpa:
+    hibernate:
+      ddl-auto: none # Flyway owns the schema
+    open-in-view: false
+  flyway:
+    enabled: true # migrations come from query-common's classpath
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+---
+# `local` profile: run against a Postgres you started yourself, e.g.
+#   docker compose up -d   (compose.yaml at the repo root)
+#   ./mvnw -pl query-api spring-boot:run -Dspring-boot.run.profiles=local
+# The zero-setup alternative (throwaway Testcontainers database):
+#   ./mvnw -pl query-api spring-boot:test-run
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:postgresql://localhost:5432/querylab
+    username: querylab
+    password: querylab

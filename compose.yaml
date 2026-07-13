@@ -1,0 +1,14 @@
+# Optional local database for the API's `local` profile:
+#   docker compose up -d
+#   ./mvnw -pl query-api spring-boot:run -Dspring-boot.run.profiles=local
+# Prefer the zero-setup route (throwaway Testcontainers DB, auto-seeded):
+#   ./mvnw -pl query-api spring-boot:test-run
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: querylab
+      POSTGRES_USER: querylab
+      POSTGRES_PASSWORD: querylab
+    ports:
+      - "5432:5432"
