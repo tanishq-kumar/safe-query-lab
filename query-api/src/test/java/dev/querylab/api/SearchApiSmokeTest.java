@@ -95,6 +95,25 @@ class SearchApiSmokeTest {
         assertThat(((Number) response.getBody().get("totalElements")).longValue()).isEqualTo(expected);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"jdbc", "jpa", "querydsl", "jooq", "mybatis"})
+    void joinFiltersAgreeAcrossEnginesOverHttp(String engine) {
+        // account.risk_rating (INNER JOIN) + merchant.category (LEFT JOIN) in one request.
+        long expected = new ReferencePortAdapter().search(TransactionSearchCriteria.builder()
+                .accountRiskRating("LOW")
+                .merchantCategory("RETAIL")
+                .size(200)
+                .build()).totalElements();
+
+        ResponseEntity<Map<String, Object>> response = get(
+                "/api/transactions/search?engine=" + engine
+                        + "&accountRiskRating=LOW&merchantCategory=RETAIL&size=200");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(((Number) response.getBody().get("totalElements")).longValue())
+                .isPositive().isEqualTo(expected);
+    }
+
     @Test
     void sortInjectionIsRejectedWith400() {
         ResponseEntity<Map<String, Object>> response = get(

@@ -29,6 +29,9 @@ public record SearchRequest(
         Instant createdFrom,
         Instant createdTo,
         String q,
+        String accountRiskRating,
+        String merchantCategory,
+        String merchantCountry,
         Integer page,
         Integer size,
         String sortBy,
@@ -46,6 +49,9 @@ public record SearchRequest(
                 .createdFrom(createdFrom)
                 .createdTo(createdTo)
                 .descriptionContains(q)
+                .accountRiskRating(accountRiskRating)
+                .merchantCategory(merchantCategory)
+                .merchantCountry(merchantCountry)
                 .page(page == null ? 0 : page)
                 .size(size == null ? TransactionSearchCriteria.DEFAULT_PAGE_SIZE : size)
                 .sortBy(SortKey.fromParam(sortBy))
