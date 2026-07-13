@@ -23,6 +23,13 @@
       <groupId>org.jooq</groupId>
       <artifactId>jooq</artifactId>
     </dependency>
+    <!-- Only for JooqEngineConfiguration; optional so the adapter stays usable
+         (tests, benchmarks) with no Spring on the classpath. -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-context</artifactId>
+      <optional>true</optional>
+    </dependency>
 
     <dependency>
       <groupId>dev.querylab</groupId>
@@ -80,8 +87,9 @@
                 <generator>
                   <database>
                     <inputSchema>public</inputSchema>
-                    <includes>.*</includes>
-                    <excludes>flyway_schema_history</excludes>
+                    <!-- Just our tables: keeps pg_trgm's routines and Flyway's
+                         history table out of the generated sources. -->
+                    <includes>transactions|account</includes>
                   </database>
                   <generate>
                     <javaTimeTypes>true</javaTimeTypes>
