@@ -82,12 +82,21 @@
           </annotationProcessorPaths>
         </configuration>
       </plugin>
+      <!-- exec:exec (a real child `java` process), NOT exec:java: JMH forks its
+           measurement JVMs using java.class.path, which inside Maven's own JVM
+           is just the classworlds launcher — forks then die with
+           ClassNotFoundException: ForkedMain. Run with:
+           ./mvnw -pl query-benchmarks exec:exec -->
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
         <configuration>
-          <mainClass>dev.querylab.bench.BenchmarkRunner</mainClass>
-          <classpathScope>compile</classpathScope>
+          <executable>java</executable>
+          <arguments>
+            <argument>-classpath</argument>
+            <classpath/>
+            <argument>dev.querylab.bench.BenchmarkRunner</argument>
+          </arguments>
         </configuration>
       </plugin>
     </plugins>
