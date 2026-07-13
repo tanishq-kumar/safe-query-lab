@@ -42,6 +42,7 @@
     <jmh.version>1.37</jmh.version>
     <tc-jooq-codegen-plugin.version>0.0.4</tc-jooq-codegen-plugin.version>
     <exec-maven-plugin.version>3.6.3</exec-maven-plugin.version>
+    <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
   </properties>
 
   <dependencyManagement>
@@ -96,6 +97,25 @@
           <groupId>org.codehaus.mojo</groupId>
           <artifactId>exec-maven-plugin</artifactId>
           <version>${exec-maven-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <version>${maven-javadoc-plugin.version}</version>
+          <configuration>
+            <source>${java.version}</source>
+            <show>protected</show>
+            <failOnError>false</failOnError>
+            <quiet>true</quiet>
+            <!-- Retheme: layer theme.css on top of the stock doclet stylesheet.
+                 javadocDirectory is where the plugin looks for addStylesheets;
+                 the aggregate goal runs in the reactor root, so this resolves to
+                 <repo>/src/main/javadoc/theme.css. -->
+            <javadocDirectory>${project.basedir}/src/main/javadoc</javadocDirectory>
+            <addStylesheets>
+              <addStylesheet>theme.css</addStylesheet>
+            </addStylesheets>
+          </configuration>
         </plugin>
       </plugins>
     </pluginManagement>

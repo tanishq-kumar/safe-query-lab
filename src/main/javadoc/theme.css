@@ -1,0 +1,63 @@
+/*
+ * safe-query-lab Javadoc theme.
+ *
+ * The JDK 21 standard doclet drives all of its colors from CSS custom
+ * properties declared in :root, so retheming is just overriding those
+ * variables. This file is layered on top of the stock stylesheet via the
+ * maven-javadoc-plugin <addStylesheets> option (javadoc --add-stylesheet),
+ * which loads it AFTER the default, so these declarations win.
+ *
+ * Palette matches the hand-built docs pages (landing, notes, benchmarks):
+ * teal accent (#0f766e), slate text, light surfaces — so the whole site,
+ * generated and authored alike, reads as one thing.
+ */
+:root {
+    /* System font stack instead of bundled DejaVu — feels less "vintage Javadoc". */
+    --body-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --block-font-family: var(--body-font-family);
+    --code-font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+
+    --body-text-color: #1f2937;
+    --block-text-color: #1f2937;
+
+    --body-background-color: #f8fafc;
+    --section-background-color: #ffffff;
+    --detail-background-color: #ffffff;
+    --code-background-color: #eef2f7;
+
+    /* Teal top navigation instead of the stock steel blue. */
+    --navbar-background-color: #0f766e;
+    --navbar-text-color: #ffffff;
+
+    --subnav-background-color: #d7f2ec;
+    --subnav-link-color: #0f766e;
+    --member-heading-background-color: #e8f5f2;
+
+    /* Selected tab / highlight: teal fill, white text (was orange). */
+    --selected-background-color: #0f766e;
+    --selected-text-color: #ffffff;
+    --selected-link-color: #c9f0ea;
+
+    --table-header-color: #e8f0ef;
+    --even-row-color: #ffffff;
+    --odd-row-color: #f1f5f9;
+
+    --title-color: #115e59;
+
+    --link-color: #0f766e;
+    --link-color-active: #b45309;
+
+    --toc-background-color: #f1f5f9;
+    --toc-highlight-color: #d7f2ec;
+    --toc-hover-color: #e2e8f0;
+
+    --snippet-background-color: #f1f5f9;
+
+    --border-color: #e5e7eb;
+}
+
+/* A slim teal rule under the header title, purely to signal the retheme. */
+.title {
+    border-bottom: 3px solid #0f766e;
+    padding-bottom: 6px;
+}

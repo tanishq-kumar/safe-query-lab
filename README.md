@@ -3,6 +3,7 @@
 **The same production feature built five ways — and proven behaviorally identical.**
 
 [![CI](https://github.com/tanishq-kumar/safe-query-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/tanishq-kumar/safe-query-lab/actions/workflows/ci.yml)
+[![Docs](https://github.com/tanishq-kumar/safe-query-lab/actions/workflows/docs.yml/badge.svg)](https://github.com/tanishq-kumar/safe-query-lab/actions/workflows/docs.yml)
 
 Every enterprise backend eventually grows this screen: *search transactions by any
 combination of status, amount range, date range, account, currency, and free text*.
@@ -12,6 +13,13 @@ how injection vulnerabilities are born.
 
 For a source-guided tour of the inline implementation notes, see
 [docs/implementation-notes.md](docs/implementation-notes.md).
+
+Generate browsable Javadocs locally with:
+
+```bash
+./mvnw -B -DskipTests compile javadoc:aggregate
+open target/reports/apidocs/index.html
+```
 
 This repo implements that one feature — dynamic, safe query generation — with the
 five mainstream Java techniques, side by side:
