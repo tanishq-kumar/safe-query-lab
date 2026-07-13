@@ -2,7 +2,7 @@
 
 **The same production feature built five ways — and proven behaviorally identical.**
 
-[![CI](https://github.com/OWNER/safe-query-lab/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
+[![CI](https://github.com/tanishq-kumar/safe-query-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/tanishq-kumar/safe-query-lab/actions/workflows/ci.yml)
 
 Every enterprise backend eventually grows this screen: *search transactions by any
 combination of status, amount range, date range, account, currency, and free text*.
