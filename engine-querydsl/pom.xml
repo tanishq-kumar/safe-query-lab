@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>dev.querylab</groupId>
+    <artifactId>safe-query-lab</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>engine-querydsl</artifactId>
+  <name>engine-querydsl</name>
+  <description>Technique 2: QueryDSL (JPA backend). BooleanBuilder predicate assembly over generated Q-types; explicit two-query pagination (fetchResults/fetchCount are deprecated for a reason).</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>dev.querylab</groupId>
+      <artifactId>query-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <!-- The `jakarta` classifier is REQUIRED with Spring Boot 3; the default (classifier-less)
+         artifact targets javax.persistence and fails at runtime. The explicit version is
+         needed too: dependencyManagement does NOT apply across classifiers, so the Boot BOM
+         entry for classifier-less querydsl-jpa doesn't cover this artifact. -->
+    <dependency>
+      <groupId>com.querydsl</groupId>
+      <artifactId>querydsl-jpa</artifactId>
+      <version>${querydsl.version}</version>
+      <classifier>jakarta</classifier>
+    </dependency>
+
+    <dependency>
+      <groupId>dev.querylab</groupId>
+      <artifactId>query-conformance</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Q-type generation. Runs as a normal annotation processor inside the compiler —
+           never use the abandoned apt-maven-plugin (breaks on modern JDKs). Generated
+           sources land in target/generated-sources/annotations automatically. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>com.querydsl</groupId>
+              <artifactId>querydsl-apt</artifactId>
+              <version>${querydsl.version}</version>
+              <classifier>jakarta</classifier>
+            </path>
+            <path>
+              <groupId>jakarta.persistence</groupId>
+              <artifactId>jakarta.persistence-api</artifactId>
+              <version>${jakarta-persistence.version}</version>
+            </path>
+            <path>
+              <groupId>jakarta.annotation</groupId>
+              <artifactId>jakarta.annotation-api</artifactId>
+              <version>${jakarta-annotation.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -1,0 +1,19 @@
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+
+# OS
+.DS_Store
+
+# Benchmark output is regenerated; committed snapshots live in docs/
+query-benchmarks/results/

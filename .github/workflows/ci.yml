@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # has Docker — required for Testcontainers + jOOQ codegen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      # Benchmarks are compiled but never executed in CI (results would be noise on shared runners).
+      - name: Build and run conformance suites
+        run: ./mvnw -B verify
