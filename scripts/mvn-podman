@@ -1,0 +1,39 @@
+#!/usr/bin/env sh
+set -eu
+
+if ! command -v podman >/dev/null 2>&1; then
+  echo "podman was not found on PATH" >&2
+  exit 127
+fi
+
+# On macOS, Podman usually exposes a Docker-compatible socket through a
+# Podman machine. Start it if it exists but is not running yet.
+if command -v uname >/dev/null 2>&1 && [ "$(uname -s)" = "Darwin" ]; then
+  podman machine start >/dev/null 2>&1 || true
+fi
+
+socket_path="${PODMAN_SOCKET_PATH:-}"
+
+if [ -z "$socket_path" ]; then
+  socket_path="$(podman machine inspect --format '{{ .ConnectionInfo.PodmanSocket.Path }}' 2>/dev/null || true)"
+fi
+
+if [ -z "$socket_path" ]; then
+  runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  if [ -S "$runtime_dir/podman/podman.sock" ]; then
+    socket_path="$runtime_dir/podman/podman.sock"
+  fi
+fi
+
+if [ -z "$socket_path" ] || [ ! -S "$socket_path" ]; then
+  echo "Could not find a Podman socket for Testcontainers." >&2
+  echo "Try: podman machine init && podman machine start" >&2
+  echo "Or set PODMAN_SOCKET_PATH=/path/to/podman.sock and rerun this script." >&2
+  exit 1
+fi
+
+export DOCKER_HOST="unix://$socket_path"
+export TESTCONTAINERS_RYUK_DISABLED="${TESTCONTAINERS_RYUK_DISABLED:-true}"
+export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-/var/run/docker.sock}"
+
+exec ./mvnw "$@"

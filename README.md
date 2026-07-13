@@ -10,6 +10,9 @@ The query can't be written ahead of time — it has to be assembled from whateve
 filters the user happened to send. Assembling SQL from user input is also exactly
 how injection vulnerabilities are born.
 
+For a source-guided tour of the inline implementation notes, see
+[docs/implementation-notes.md](docs/implementation-notes.md).
+
 This repo implements that one feature — dynamic, safe query generation — with the
 five mainstream Java techniques, side by side:
 
@@ -50,6 +53,15 @@ Requirements: JDK 21+, Docker (or Podman with the Docker socket enabled).
 ./mvnw verify                                   # build everything, run all conformance suites
 ./mvnw -pl engine-jooq -am test                 # prove any single engine on its own
 ./mvnw -pl query-api spring-boot:test-run       # boot the API on a throwaway, seeded Postgres
+```
+
+Using Podman locally:
+
+```bash
+podman machine init                             # first time only, if no machine exists
+podman machine start
+./scripts/mvn-podman -B verify
+./scripts/mvn-podman -pl engine-jooq -am generate-sources
 ```
 
 Then compare engines live:
