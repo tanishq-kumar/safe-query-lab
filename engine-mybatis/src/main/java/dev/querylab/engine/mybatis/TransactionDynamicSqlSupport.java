@@ -26,6 +26,7 @@ public final class TransactionDynamicSqlSupport {
     public static final SqlColumn<String> description = transactions.description;
     public static final SqlColumn<String> counterparty = transactions.counterparty;
     public static final SqlColumn<Instant> createdAt = transactions.createdAt;
+    public static final SqlColumn<UUID> merchantId = transactions.merchantId;
 
     private TransactionDynamicSqlSupport() {
     }
@@ -40,6 +41,7 @@ public final class TransactionDynamicSqlSupport {
         public final SqlColumn<String> description = column("description");
         public final SqlColumn<String> counterparty = column("counterparty");
         public final SqlColumn<Instant> createdAt = column("created_at", JDBCType.TIMESTAMP_WITH_TIMEZONE);
+        public final SqlColumn<UUID> merchantId = column("merchant_id");
 
         public Transactions() {
             super("transactions", Transactions::new);

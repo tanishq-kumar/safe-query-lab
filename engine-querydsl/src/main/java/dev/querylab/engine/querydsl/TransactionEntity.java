@@ -7,7 +7,10 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
@@ -31,8 +34,13 @@ public class TransactionEntity {
     @Id
     private UUID id;
 
-    @Column(name = "account_id", nullable = false)
-    private UUID accountId;
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @JoinColumn(name = "account_id")
+    private Account account;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "merchant_id")
+    private Merchant merchant;
 
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal amount;
@@ -62,7 +70,11 @@ public class TransactionEntity {
     }
 
     public Transaction toDomain() {
-        return new Transaction(id, accountId, amount, currency, status, type,
-                description, counterparty, createdAt);
+        return new Transaction(id, account.getId(), amount, currency, status, type,
+                description, counterparty, createdAt,
+                account.getRiskRating(),
+                merchant == null ? null : merchant.getName(),
+                merchant == null ? null : merchant.getCategory(),
+                merchant == null ? null : merchant.getCountry());
     }
 }

@@ -12,7 +12,6 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
-import static dev.querylab.engine.jpa.TransactionColumns.ACCOUNT_ID;
 import static dev.querylab.engine.jpa.TransactionColumns.AMOUNT;
 import static dev.querylab.engine.jpa.TransactionColumns.CREATED_AT;
 import static dev.querylab.engine.jpa.TransactionColumns.CURRENCY;
@@ -42,7 +41,10 @@ final class TransactionSpecifications {
                 amountAtMost(criteria.maxAmount()),
                 createdAtOrAfter(criteria.createdFrom()),
                 createdBefore(criteria.createdTo()),
-                descriptionContains(criteria.descriptionContains()));
+                descriptionContains(criteria.descriptionContains()),
+                accountRiskRatingIs(criteria.accountRiskRating()),
+                merchantCategoryIs(criteria.merchantCategory()),
+                merchantCountryIs(criteria.merchantCountry()));
     }
 
     private static Specification<TransactionEntity> statusIn(Set<TransactionStatus> statuses) {
@@ -56,8 +58,9 @@ final class TransactionSpecifications {
     }
 
     private static Specification<TransactionEntity> accountIs(UUID accountId) {
+        // Traverses the account association: root.get("account").get("id").
         return accountId == null ? null
-                : (root, query, cb) -> cb.equal(root.get(ACCOUNT_ID), accountId);
+                : (root, query, cb) -> cb.equal(root.get("account").get("id"), accountId);
     }
 
     private static Specification<TransactionEntity> currencyIs(String currency) {
@@ -95,5 +98,23 @@ final class TransactionSpecifications {
         String pattern = LikeEscaper.containsPattern(text).toLowerCase(Locale.ROOT);
         return (root, query, cb) ->
                 cb.like(cb.lower(root.get(DESCRIPTION)), pattern, LikeEscaper.ESCAPE_CHAR);
+    }
+
+    private static Specification<TransactionEntity> accountRiskRatingIs(String riskRating) {
+        // Filters across the (mandatory) account join.
+        return riskRating == null ? null
+                : (root, query, cb) -> cb.equal(root.get("account").get("riskRating"), riskRating);
+    }
+
+    private static Specification<TransactionEntity> merchantCategoryIs(String category) {
+        // root.get("merchant") is an inner join, so this also excludes rows with
+        // no merchant — the intended positive-filter semantics.
+        return category == null ? null
+                : (root, query, cb) -> cb.equal(root.get("merchant").get("category"), category);
+    }
+
+    private static Specification<TransactionEntity> merchantCountryIs(String country) {
+        return country == null ? null
+                : (root, query, cb) -> cb.equal(root.get("merchant").get("country"), country);
     }
 }

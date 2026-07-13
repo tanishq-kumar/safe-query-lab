@@ -42,8 +42,21 @@ import java.util.UUID;
  */
 public final class JdbcTransactionSearchAdapter implements TransactionSearchPort {
 
-    private static final String COLUMNS =
-            "id, account_id, amount, currency, status, type, description, counterparty, created_at";
+    // Columns are table-qualified because id/name now appear in more than one
+    // joined table (t.id vs a.id vs m.id would otherwise be ambiguous). Joined
+    // columns are aliased so the ResultSet labels don't collide.
+    private static final String SELECT_LIST =
+            "t.id, t.account_id, t.amount, t.currency, t.status, t.type, t.description, "
+            + "t.counterparty, t.created_at, a.risk_rating AS account_risk_rating, "
+            + "m.name AS merchant_name, m.category AS merchant_category, m.country AS merchant_country";
+
+    // account is mandatory (INNER JOIN); merchant is optional (LEFT JOIN), so
+    // merchant-less rows survive with NULL merchant columns. Neither join
+    // multiplies rows (both are many-to-one to a PK), so COUNT(*) stays correct.
+    private static final String FROM =
+            " FROM transactions t "
+            + "JOIN account a ON t.account_id = a.id "
+            + "LEFT JOIN merchant m ON t.merchant_id = m.id";
 
     private final DataSource dataSource;
 
@@ -60,8 +73,8 @@ public final class JdbcTransactionSearchAdapter implements TransactionSearchPort
         // computes the window count per row and returns it redundantly; with an
         // indexed, selective WHERE the two-query form usually wins. Worth
         // knowing both.
-        String countSql = "SELECT COUNT(*) FROM transactions" + where.sql();
-        String dataSql = "SELECT " + COLUMNS + " FROM transactions" + where.sql()
+        String countSql = "SELECT COUNT(*)" + FROM + where.sql();
+        String dataSql = "SELECT " + SELECT_LIST + FROM + where.sql()
                 + orderByClause(criteria) + " LIMIT ? OFFSET ?";
 
         try (Connection connection = dataSource.getConnection()) {
@@ -80,7 +93,7 @@ public final class JdbcTransactionSearchAdapter implements TransactionSearchPort
 
     /** Exposes the generated data-query SQL for the /explain endpoint. */
     public String renderSql(TransactionSearchCriteria criteria) {
-        return "SELECT " + COLUMNS + " FROM transactions" + buildWhere(criteria).sql()
+        return "SELECT " + SELECT_LIST + FROM + buildWhere(criteria).sql()
                 + orderByClause(criteria) + " LIMIT ? OFFSET ?";
     }
 
@@ -100,7 +113,7 @@ public final class JdbcTransactionSearchAdapter implements TransactionSearchPort
             // one placeholder per element. (Postgres-specific alternative:
             // "status = ANY(?)" with Connection.createArrayOf — one placeholder,
             // stable SQL text for any set size, better statement caching.)
-            StringJoiner placeholders = new StringJoiner(", ", "status IN (", ")");
+            StringJoiner placeholders = new StringJoiner(", ", "t.status IN (", ")");
             for (TransactionStatus status : criteria.statuses()) {
                 placeholders.add("?");
                 params.add(status.name());
@@ -108,38 +121,53 @@ public final class JdbcTransactionSearchAdapter implements TransactionSearchPort
             predicates.add(placeholders.toString());
         }
         if (criteria.type() != null) {
-            predicates.add("type = ?");
+            predicates.add("t.type = ?");
             params.add(criteria.type().name());
         }
         if (criteria.accountId() != null) {
-            predicates.add("account_id = ?");
+            predicates.add("t.account_id = ?");
             params.add(criteria.accountId());
         }
         if (criteria.currency() != null) {
-            predicates.add("currency = ?");
+            predicates.add("t.currency = ?");
             params.add(criteria.currency());
         }
         if (criteria.minAmount() != null) {
-            predicates.add("amount >= ?");
+            predicates.add("t.amount >= ?");
             params.add(criteria.minAmount());
         }
         if (criteria.maxAmount() != null) {
-            predicates.add("amount <= ?");
+            predicates.add("t.amount <= ?");
             params.add(criteria.maxAmount());
         }
         if (criteria.createdFrom() != null) {
-            predicates.add("created_at >= ?");
+            predicates.add("t.created_at >= ?");
             params.add(criteria.createdFrom());
         }
         if (criteria.createdTo() != null) {
-            predicates.add("created_at < ?"); // half-open range, per port contract
+            predicates.add("t.created_at < ?"); // half-open range, per port contract
             params.add(criteria.createdTo());
         }
         if (criteria.descriptionContains() != null) {
             // The whole pattern is ONE bound value; ESCAPE makes the backslash
             // escaping explicit instead of relying on Postgres's default.
-            predicates.add("description ILIKE ? ESCAPE '\\'");
+            predicates.add("t.description ILIKE ? ESCAPE '\\'");
             params.add(LikeEscaper.containsPattern(criteria.descriptionContains()));
+        }
+        // Join filters: these reference the joined tables. A predicate on m.*
+        // over the LEFT JOIN behaves as an inner filter (rows with no merchant
+        // have NULL there and fail the equality), which is the intended semantics.
+        if (criteria.accountRiskRating() != null) {
+            predicates.add("a.risk_rating = ?");
+            params.add(criteria.accountRiskRating());
+        }
+        if (criteria.merchantCategory() != null) {
+            predicates.add("m.category = ?");
+            params.add(criteria.merchantCategory());
+        }
+        if (criteria.merchantCountry() != null) {
+            predicates.add("m.country = ?");
+            params.add(criteria.merchantCountry());
         }
 
         return predicates.isEmpty()
@@ -152,9 +180,9 @@ public final class JdbcTransactionSearchAdapter implements TransactionSearchPort
         // constants — user input cannot reach the SQL text, which is the entire
         // ORDER-BY-injection defense. See SortKey for the parse-time whitelist.
         String column = switch (criteria.sortBy()) {
-            case CREATED_AT -> "created_at";
-            case AMOUNT -> "amount";
-            case ID -> "id";
+            case CREATED_AT -> "t.created_at";
+            case AMOUNT -> "t.amount";
+            case ID -> "t.id";
         };
         String direction = switch (criteria.sortDirection()) {
             case ASC -> "ASC";
@@ -162,7 +190,7 @@ public final class JdbcTransactionSearchAdapter implements TransactionSearchPort
         };
         String tiebreak = criteria.sortBy() == dev.querylab.common.search.SortKey.ID
                 ? "" // id is already the primary sort; a tiebreak on it is redundant
-                : ", id ASC";
+                : ", t.id ASC";
         return " ORDER BY " + column + " " + direction + tiebreak;
     }
 
@@ -221,6 +249,10 @@ public final class JdbcTransactionSearchAdapter implements TransactionSearchPort
                 TransactionType.valueOf(rs.getString("type")),
                 rs.getString("description"),
                 rs.getString("counterparty"),
-                rs.getObject("created_at", OffsetDateTime.class).toInstant());
+                rs.getObject("created_at", OffsetDateTime.class).toInstant(),
+                rs.getString("account_risk_rating"),
+                rs.getString("merchant_name"),      // null for merchant-less rows
+                rs.getString("merchant_category"),
+                rs.getString("merchant_country"));
     }
 }

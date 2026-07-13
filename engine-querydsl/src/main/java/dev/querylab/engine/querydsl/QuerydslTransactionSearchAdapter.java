@@ -72,7 +72,8 @@ public class QuerydslTransactionSearchAdapter implements TransactionSearchPort {
             where.and(tx.type.eq(criteria.type()));
         }
         if (criteria.accountId() != null) {
-            where.and(tx.accountId.eq(criteria.accountId()));
+            // Traverses the association; QueryDSL adds the account join implicitly.
+            where.and(tx.account.id.eq(criteria.accountId()));
         }
         if (criteria.currency() != null) {
             where.and(tx.currency.eq(criteria.currency()));
@@ -96,6 +97,17 @@ public class QuerydslTransactionSearchAdapter implements TransactionSearchPort {
             where.and(tx.description.likeIgnoreCase(
                     LikeEscaper.containsPattern(criteria.descriptionContains()),
                     LikeEscaper.ESCAPE_CHAR));
+        }
+        // Join filters. tx.account.* / tx.merchant.* add implicit joins; the
+        // merchant predicate's inner join drops rows with no merchant.
+        if (criteria.accountRiskRating() != null) {
+            where.and(tx.account.riskRating.eq(criteria.accountRiskRating()));
+        }
+        if (criteria.merchantCategory() != null) {
+            where.and(tx.merchant.category.eq(criteria.merchantCategory()));
+        }
+        if (criteria.merchantCountry() != null) {
+            where.and(tx.merchant.country.eq(criteria.merchantCountry()));
         }
         return where;
     }

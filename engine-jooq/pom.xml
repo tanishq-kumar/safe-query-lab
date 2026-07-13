@@ -89,7 +89,7 @@
                     <inputSchema>public</inputSchema>
                     <!-- Just our tables: keeps pg_trgm's routines and Flyway's
                          history table out of the generated sources. -->
-                    <includes>transactions|account</includes>
+                    <includes>transactions|account|merchant</includes>
                   </database>
                   <generate>
                     <javaTimeTypes>true</javaTimeTypes>

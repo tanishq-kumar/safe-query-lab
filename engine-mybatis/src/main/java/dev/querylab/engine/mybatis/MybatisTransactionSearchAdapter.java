@@ -16,6 +16,12 @@ import org.mybatis.dynamic.sql.where.WhereApplier;
 import java.util.List;
 import java.util.Locale;
 
+import static dev.querylab.engine.mybatis.AccountDynamicSqlSupport.account;
+import static dev.querylab.engine.mybatis.AccountDynamicSqlSupport.riskRating;
+import static dev.querylab.engine.mybatis.MerchantDynamicSqlSupport.category;
+import static dev.querylab.engine.mybatis.MerchantDynamicSqlSupport.country;
+import static dev.querylab.engine.mybatis.MerchantDynamicSqlSupport.merchant;
+import static dev.querylab.engine.mybatis.MerchantDynamicSqlSupport.name;
 import static dev.querylab.engine.mybatis.TransactionDynamicSqlSupport.accountId;
 import static dev.querylab.engine.mybatis.TransactionDynamicSqlSupport.amount;
 import static dev.querylab.engine.mybatis.TransactionDynamicSqlSupport.counterparty;
@@ -23,10 +29,12 @@ import static dev.querylab.engine.mybatis.TransactionDynamicSqlSupport.createdAt
 import static dev.querylab.engine.mybatis.TransactionDynamicSqlSupport.currency;
 import static dev.querylab.engine.mybatis.TransactionDynamicSqlSupport.description;
 import static dev.querylab.engine.mybatis.TransactionDynamicSqlSupport.id;
+import static dev.querylab.engine.mybatis.TransactionDynamicSqlSupport.merchantId;
 import static dev.querylab.engine.mybatis.TransactionDynamicSqlSupport.status;
 import static dev.querylab.engine.mybatis.TransactionDynamicSqlSupport.transactions;
 import static dev.querylab.engine.mybatis.TransactionDynamicSqlSupport.type;
 import static org.mybatis.dynamic.sql.SqlBuilder.countFrom;
+import static org.mybatis.dynamic.sql.SqlBuilder.equalTo;
 import static org.mybatis.dynamic.sql.SqlBuilder.isGreaterThanOrEqualToWhenPresent;
 import static org.mybatis.dynamic.sql.SqlBuilder.isInWhenPresent;
 import static org.mybatis.dynamic.sql.SqlBuilder.isLessThanOrEqualToWhenPresent;
@@ -34,6 +42,7 @@ import static org.mybatis.dynamic.sql.SqlBuilder.isLessThanWhenPresent;
 import static org.mybatis.dynamic.sql.SqlBuilder.isLikeWhenPresent;
 import static org.mybatis.dynamic.sql.SqlBuilder.isEqualToWhenPresent;
 import static org.mybatis.dynamic.sql.SqlBuilder.lower;
+import static org.mybatis.dynamic.sql.SqlBuilder.on;
 import static org.mybatis.dynamic.sql.SqlBuilder.select;
 
 /**
@@ -57,7 +66,12 @@ public class MybatisTransactionSearchAdapter implements TransactionSearchPort {
     public SearchResult<Transaction> search(TransactionSearchCriteria criteria) {
         WhereApplier filters = filters(criteria);
 
+        // countFrom has no alias overload; the count selects no columns so the
+        // unaliased transactions table raises no ambiguity, and the joined tables
+        // still carry aliases for the shared WHERE.
         SelectStatementProvider countStatement = countFrom(transactions)
+                .join(account, "a", on(accountId, equalTo(AccountDynamicSqlSupport.id)))
+                .leftJoin(merchant, "m", on(merchantId, equalTo(MerchantDynamicSqlSupport.id)))
                 .applyWhere(filters)
                 // With every condition being ...WhenPresent, empty criteria render
                 // no WHERE at all — and the library then throws by default, forcing
@@ -88,8 +102,10 @@ public class MybatisTransactionSearchAdapter implements TransactionSearchPort {
     private SelectStatementProvider selectStatement(TransactionSearchCriteria criteria,
                                                     WhereApplier filters) {
         return select(id, accountId, amount, currency, status, type, description,
-                counterparty, createdAt)
-                .from(transactions)
+                counterparty, createdAt, riskRating, name, category, country)
+                .from(transactions, "t")
+                .join(account, "a", on(accountId, equalTo(AccountDynamicSqlSupport.id)))
+                .leftJoin(merchant, "m", on(merchantId, equalTo(MerchantDynamicSqlSupport.id)))
                 .applyWhere(filters)
                 .configureStatement(c -> c.setNonRenderingWhereClauseAllowed(true))
                 .orderBy(orderBy(criteria))
@@ -121,7 +137,12 @@ public class MybatisTransactionSearchAdapter implements TransactionSearchPort {
                 .and(amount, isLessThanOrEqualToWhenPresent(criteria.maxAmount()))
                 .and(createdAt, isGreaterThanOrEqualToWhenPresent(criteria.createdFrom()))
                 .and(createdAt, isLessThanWhenPresent(criteria.createdTo())) // half-open range
-                .and(lower(description), isLikeWhenPresent(pattern));
+                .and(lower(description), isLikeWhenPresent(pattern))
+                // Join filters on the joined tables; merchant predicates over the
+                // LEFT JOIN drop rows with no merchant (null fails equality).
+                .and(riskRating, isEqualToWhenPresent(criteria.accountRiskRating()))
+                .and(category, isEqualToWhenPresent(criteria.merchantCategory()))
+                .and(country, isEqualToWhenPresent(criteria.merchantCountry()));
     }
 
     private static List<SortSpecification> orderBy(TransactionSearchCriteria criteria) {

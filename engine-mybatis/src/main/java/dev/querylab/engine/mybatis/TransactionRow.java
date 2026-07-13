@@ -20,11 +20,16 @@ public class TransactionRow {
     private String description;
     private String counterparty;
     private Instant createdAt;
+    private String accountRiskRating;
+    private String merchantName;
+    private String merchantCategory;
+    private String merchantCountry;
 
     public Transaction toDomain() {
         return new Transaction(id, accountId, amount, currency,
                 TransactionStatus.valueOf(status), TransactionType.valueOf(type),
-                description, counterparty, createdAt);
+                description, counterparty, createdAt,
+                accountRiskRating, merchantName, merchantCategory, merchantCountry);
     }
 
     public void setId(UUID id) {
@@ -61,5 +66,21 @@ public class TransactionRow {
 
     public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public void setAccountRiskRating(String accountRiskRating) {
+        this.accountRiskRating = accountRiskRating;
+    }
+
+    public void setMerchantName(String merchantName) {
+        this.merchantName = merchantName;
+    }
+
+    public void setMerchantCategory(String merchantCategory) {
+        this.merchantCategory = merchantCategory;
+    }
+
+    public void setMerchantCountry(String merchantCountry) {
+        this.merchantCountry = merchantCountry;
     }
 }

@@ -29,7 +29,11 @@ public interface TransactionMapper extends CommonCountMapper {
             @Result(column = "type", property = "type"),
             @Result(column = "description", property = "description"),
             @Result(column = "counterparty", property = "counterparty"),
-            @Result(column = "created_at", property = "createdAt")
+            @Result(column = "created_at", property = "createdAt"),
+            @Result(column = "risk_rating", property = "accountRiskRating"),
+            @Result(column = "name", property = "merchantName"),
+            @Result(column = "category", property = "merchantCategory"),
+            @Result(column = "country", property = "merchantCountry")
     })
     List<TransactionRow> selectMany(SelectStatementProvider selectStatement);
 }
